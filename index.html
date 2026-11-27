@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Atelier PINN</title>
+<meta name="description" content="Atelier interactif sur les Physics-Informed Neural Networks : problème direct et inverse sur u′ = −k u, entraînés dans le navigateur.">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+</head>
+<body>
+<style>
+/* Layout : colonne de lecture étroite, démos plus larges en panneaux "paillasse" */
+:root{
+  --bg:#f4f6f8; --panel:#ffffff; --fg:#17212b; --muted:#5a6876; --line:#d9e0e7;
+  --pinn:#1f67c9; --colloc:#d9801a; --data:#17212b; --exact:#8a97a5; --ok:#2e8b57; --bad:#c2412d;
+  --code:#eef2f6;
+  --f-display:"Space Grotesk",system-ui,sans-serif;
+  --f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f151b; --panel:#161e26; --fg:#e4eaf0; --muted:#97a5b3; --line:#2a3541;
+  --pinn:#5b9cf0; --colloc:#f0a24a; --data:#e4eaf0; --exact:#6f7d8b; --ok:#5cc08a; --bad:#ef7a64; --code:#1d2731; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f151b; --panel:#161e26; --fg:#e4eaf0; --muted:#97a5b3; --line:#2a3541;
+  --pinn:#5b9cf0; --colloc:#f0a24a; --data:#e4eaf0; --exact:#6f7d8b; --ok:#5cc08a; --bad:#ef7a64; --code:#1d2731; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.6}
+.wrap{max-width:980px;margin:0 auto;padding-block:40px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:28px}
+.prose{max-width:68ch;display:flex;flex-direction:column;gap:12px}
+.prose p{margin:0}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(2rem,5vw,2.9rem);font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.65rem;font-weight:600;margin-top:24px}
+h3{font-size:1.15rem;font-weight:600}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lead{font-size:1.12rem;color:var(--muted)}
+.m{font-family:var(--f-mono);font-size:.92em;background:var(--code);padding:1px 5px;border-radius:4px;white-space:nowrap}
+.eq{font-family:var(--f-mono);background:var(--code);border-radius:8px;padding:12px 16px;overflow-x:auto;font-size:.95rem;line-height:2.4}
+.eq .c{color:var(--colloc)} .eq .p{color:var(--pinn)} .eq .d{color:var(--muted)}
+hr{border:0;border-top:1px solid var(--line);margin:8px 0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid2>*{min-width:0}
+@media (max-width:720px){.grid2{grid-template-columns:1fr}}
+.fig{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fig .cap{font-size:.8rem;color:var(--muted);font-family:var(--f-mono)}
+canvas{width:100%;display:block;border-radius:6px}
+.controls{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:end}
+.ctl{display:flex;flex-direction:column;gap:2px;font-size:.85rem;color:var(--muted);min-width:150px}
+.ctl output{font-family:var(--f-mono);color:var(--fg)}
+input[type=range]{width:170px;accent-color:var(--pinn)}
+.chk{display:flex;gap:8px;align-items:center;font-size:.88rem}
+button{font:500 .9rem var(--f-body);border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:7px;padding:7px 14px;cursor:pointer}
+button.primary{background:var(--pinn);border-color:var(--pinn);color:#fff}
+button:focus-visible,input:focus-visible{outline:2px solid var(--pinn);outline-offset:2px}
+.stats{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.85rem;font-variant-numeric:tabular-nums}
+.stats b{font-weight:500;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:6px;border-radius:2px}
+.legend i.dot{width:8px;height:8px;border-radius:50%}
+.svgbox{overflow-x:auto}
+.svgbox svg{min-width:640px;width:100%;height:auto;display:block}
+.note{border-left:3px solid var(--colloc);padding:4px 0 4px 14px;color:var(--fg)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.pair>div{min-width:0;display:flex;flex-direction:column;gap:6px}
+@media (max-width:720px){.pair{grid-template-columns:1fr}}
+.tag{font-family:var(--f-mono);font-size:.75rem;padding:2px 8px;border-radius:999px;border:1px solid currentColor}
+.tag.c{color:var(--colloc)} .tag.p{color:var(--pinn)}
+sub,sup{font-size:.72em;line-height:0}
+.fr{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;font-size:.85em;line-height:1.15;margin:0 .15em;white-space:nowrap}
+.fr>span:first-child{border-bottom:1px solid currentColor;padding:0 .2em}
+.fr>span:last-child{padding:0 .2em}
+ul{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px}
+a{color:var(--pinn)}
+</style>
+
+<div class="wrap">
+
+<header class="prose">
+  <span class="eyebrow">Physics-Informed Neural Networks</span>
+  <h1>Comprendre un PINN en deux expériences</h1>
+  <p class="lead">Un réseau de neurones qui apprend une fonction <span class="m">û(t)</span> en étant puni chaque fois qu'il viole l'équation différentielle. D'abord pour résoudre une EDO (problème direct), puis pour retrouver un paramètre inconnu à partir de mesures (problème inverse).</p>
+  <p>Les deux démos s'entraînent pour de vrai dans votre navigateur : un réseau à une couche cachée de 20 neurones <span class="m">tanh</span>, optimisé avec Adam. Les dérivées par rapport à <span class="m">t</span> et aux poids sont calculées exactement, comme le ferait la différentiation automatique de PyTorch.</p>
+</header>
+
+<!-- ================= PARTIE 1 ================= -->
+<section class="prose">
+  <span class="eyebrow">Partie 1 · problème direct</span>
+  <h2>Résoudre u′ = −k u sans solveur</h2>
+  <p>On prend l'équation la plus simple possible, une décroissance exponentielle :</p>
+  <div class="eq"><span class="fr"><span>du</span><span>dt</span></span> = −k u,&nbsp;&nbsp; u(0) = 1,&nbsp;&nbsp; t ∈ [0, 2.5],&nbsp;&nbsp; k = 1.5<br><span class="d">solution exacte : u(t) = e<sup>−1.5 t</sup></span></div>
+  <p>Un solveur classique (Euler, RK4, <span class="m">ode45</span>) avance pas à pas dans le temps. Le PINN fait tout autrement : il choisit une fonction lisse <span class="m">û(t; w)</span> paramétrée par les poids <span class="m">w</span> du réseau, et ajuste ces poids pour que la fonction satisfasse l'équation partout à la fois.</p>
+</section>
+
+<section class="panel" aria-label="Schéma du réseau">
+  <h3>Ce que calcule le réseau</h3>
+  <div class="svgbox">
+  <svg viewBox="0 0 860 300" role="img" aria-label="Schéma : t entre dans un réseau tanh, sort û(t), la dérivée dû/dt est calculée par différentiation automatique, deux termes de perte sont additionnés">
+    <style>
+      .ln{stroke:var(--line);stroke-width:1.2}
+      .nd{fill:var(--panel);stroke:var(--fg);stroke-width:1.4}
+      .ndp{fill:var(--panel);stroke:var(--pinn);stroke-width:2}
+      .tx{fill:var(--fg);font:500 14px var(--f-mono)}
+      .txs{fill:var(--muted);font:12px var(--f-mono)}
+      .bx{fill:var(--panel);stroke:var(--line);stroke-width:1.4}
+      .bxc{fill:var(--panel);stroke:var(--colloc);stroke-width:1.8}
+      .bxd{fill:var(--panel);stroke:var(--fg);stroke-width:1.8}
+      .ar{stroke:var(--muted);stroke-width:1.4;fill:none;marker-end:url(#ah)}
+    </style>
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+    <!-- edges -->
+    <g class="ln">
+      <line x1="60" y1="150" x2="200" y2="50"/><line x1="60" y1="150" x2="200" y2="100"/><line x1="60" y1="150" x2="200" y2="150"/><line x1="60" y1="150" x2="200" y2="200"/><line x1="60" y1="150" x2="200" y2="250"/>
+      <line x1="200" y1="50" x2="340" y2="150"/><line x1="200" y1="100" x2="340" y2="150"/><line x1="200" y1="150" x2="340" y2="150"/><line x1="200" y1="200" x2="340" y2="150"/><line x1="200" y1="250" x2="340" y2="150"/>
+    </g>
+    <circle class="nd" cx="60" cy="150" r="22"/><text class="tx" x="60" y="155" text-anchor="middle">t</text>
+    <g>
+      <circle class="nd" cx="200" cy="50" r="16"/><circle class="nd" cx="200" cy="100" r="16"/><circle class="nd" cx="200" cy="150" r="16"/><circle class="nd" cx="200" cy="200" r="16"/><circle class="nd" cx="200" cy="250" r="16"/>
+    </g>
+    <text class="txs" x="200" y="290" text-anchor="middle">20 neurones tanh</text>
+    <text class="txs" x="130" y="22" text-anchor="middle">poids w</text>
+    <circle class="ndp" cx="340" cy="150" r="24"/><text class="tx" x="340" y="155" text-anchor="middle" style="fill:var(--pinn)">û(t)</text>
+    <!-- autodiff -->
+    <path class="ar" d="M364 140 C 400 100, 410 80, 440 80"/>
+    <rect class="bx" x="442" y="48" width="150" height="66" rx="6"/>
+    <text class="tx" x="517" y="67" text-anchor="middle">dû</text>
+    <line x1="503" y1="72" x2="531" y2="72" stroke="var(--fg)" stroke-width="1.3"/>
+    <text class="tx" x="517" y="88" text-anchor="middle">dt</text>
+    <text class="txs" x="517" y="106" text-anchor="middle">autodiff, exacte</text>
+    <path class="ar" d="M364 160 C 400 200, 410 220, 440 220"/>
+    <rect class="bx" x="442" y="198" width="150" height="44" rx="6"/>
+    <text class="tx" x="517" y="218" text-anchor="middle">û(0)</text>
+    <text class="txs" x="517" y="235" text-anchor="middle">évalué en t = 0</text>
+    <!-- losses -->
+    <path class="ar" d="M592 80 L 626 80"/>
+    <rect class="bxc" x="628" y="46" width="218" height="72" rx="6"/>
+    <text class="tx" x="737" y="68" text-anchor="middle" style="fill:var(--colloc)">L<tspan baseline-shift="sub" font-size="10">EDO</tspan></text>
+    <text class="txs" x="679" y="97" text-anchor="end">moy (</text>
+    <text class="txs" x="691" y="88" text-anchor="middle">dû</text>
+    <line x1="682" y1="92" x2="700" y2="92" stroke="var(--fg)" stroke-width="1.1"/>
+    <text class="txs" x="691" y="106" text-anchor="middle">dt</text>
+    <text class="txs" x="703" y="97" text-anchor="start">+ k û)<tspan baseline-shift="super" font-size="9">2</tspan> aux t<tspan baseline-shift="sub" font-size="9">i</tspan></text>
+    <path class="ar" d="M592 220 L 626 220"/>
+    <rect class="bxd" x="628" y="190" width="218" height="62" rx="6"/>
+    <text class="tx" x="737" y="214" text-anchor="middle">L<tspan baseline-shift="sub" font-size="10">CI</tspan></text>
+    <text class="txs" x="737" y="236" text-anchor="middle">(û(0) − 1)<tspan baseline-shift="super" font-size="10">2</tspan></text>
+    <text class="tx" x="737" y="158" text-anchor="middle">L = L<tspan baseline-shift="sub" font-size="10">CI</tspan> + L<tspan baseline-shift="sub" font-size="10">EDO</tspan></text>
+    <text class="txs" x="737" y="176" text-anchor="middle">→ gradient → Adam met à jour w</text>
+  </svg>
+  </div>
+  <div class="pair">
+    <div>
+      <span><span class="tag c">points de collocation</span></span>
+      <p style="margin:0">Des instants <span class="m">t<sub>i</sub></span> tirés au hasard dans le domaine, <b>sans aucune valeur mesurée</b>. On y évalue seulement le résidu <span class="m">r(t) = <span class="fr"><span>dû</span><span>dt</span></span> + k û</span>. C'est la physique qui sert d'étiquette. Sur les graphiques, ils sont dessinés comme de petits traits sur l'axe des t, car ils n'ont pas de valeur de u.</p>
+    </div>
+    <div>
+      <span><span class="tag" style="color:var(--fg)">condition initiale / données</span></span>
+      <p style="margin:0">Des points où l'on connaît la valeur de <span class="m">u</span>. Ici un seul : <span class="m">u(0) = 1</span>. Sans lui, <span class="m">û ≡ 0</span> satisfait parfaitement l'EDO : c'est ce point qui fixe la solution parmi toute la famille <span class="m">C·e<sup>−kt</sup></span>.</p>
+    </div>
+  </div>
+</section>
+
+<section class="panel" aria-label="Démo problème direct">
+  <h3>Démo 1 · entraîner le PINN direct</h3>
+  <div class="controls">
+    <button class="primary" id="f-run">Pause</button>
+    <button id="f-reset">Recommencer</button>
+    <button id="f-resample">Nouveaux points</button>
+    <label class="ctl" for="f-nc">Points de collocation <output id="f-nc-o">32</output><input type="range" id="f-nc" min="2" max="64" value="32"></label>
+    <label class="ctl" for="f-speed">Vitesse <output id="f-speed-o">≈ 30 itérations/s</output><input type="range" id="f-speed" min="0" max="9" value="2"></label>
+    <label class="chk"><input type="checkbox" id="f-phys" checked><span>Terme physique L<sub>EDO</sub> actif</span></label>
+  </div>
+  <div class="stats" id="f-stats"></div>
+  <div class="grid2">
+    <div class="fig"><canvas id="f-sol" height="260"></canvas>
+      <div class="legend"><span><i style="background:var(--exact)"></i>solution exacte</span><span><i style="background:var(--pinn)"></i>PINN û(t)</span><span><i style="background:var(--colloc)"></i>collocation t<sub>i</sub> : traits sur l'axe (aucune valeur de u connue)</span><span><i class="dot" style="background:var(--panel);border:1.8px solid var(--colloc)"></i>prédiction du réseau û(t<sub>i</sub>)</span><span><i class="dot" style="background:var(--data)"></i>u(0) = 1</span></div>
+    </div>
+    <div class="fig"><canvas id="f-loss" height="260"></canvas>
+      <div class="legend"><span><i style="background:var(--colloc)"></i>L<sub>EDO</sub> (résidu)</span><span><i style="background:var(--data)"></i>L<sub>CI</sub></span><span>échelle log<sub>10</sub></span></div>
+    </div>
+  </div>
+  <div class="fig"><canvas id="f-res" height="150"></canvas>
+    <div class="cap">résidu r(t) = <span class="fr"><span>dû</span><span>dt</span></span> + 1.5 û sur tout le domaine · traits = points de collocation</div>
+  </div>
+</section>
+
+<section class="prose">
+  <h3>À essayer</h3>
+  <ul>
+    <li><b>Décochez le terme physique</b> puis recommencez : le réseau colle à <span class="m">u(0) = 1</span> et fait n'importe quoi ailleurs, le résidu reste énorme. Les données seules ne suffisent pas.</li>
+    <li><b>Mettez 2 ou 3 points de collocation</b> : le résidu s'annule exactement sur ces points mais peut rester grand entre eux. Les points de collocation sont l'équivalent d'un maillage, en plus souple.</li>
+    <li><b>Regardez le début de l'entraînement</b> : la courbe se cale d'abord près de <span class="m">t = 0</span>, puis l'information se propage vers la droite. C'est un comportement typique des PINN sur les problèmes d'évolution.</li>
+  </ul>
+  <p class="note">Ce qu'il faut retenir : la perte totale <span class="m">L = L<sub>CI</sub> + L<sub>EDO</sub></span> combine un terme supervisé classique et un terme non supervisé qui encode l'équation. Le réseau ne voit jamais la solution exacte.</p>
+</section>
+
+<!-- ================= PARTIE 2 ================= -->
+<section class="prose">
+  <span class="eyebrow">Partie 2 · problème inverse</span>
+  <h2>Retrouver k à partir de mesures bruitées</h2>
+  <p>On inverse maintenant les rôles. On ne connaît plus <span class="m">k</span>, mais on a quelques mesures bruitées <span class="m">(t<sub>j</sub>, y<sub>j</sub>)</span> de la courbe. Ces mesures sont simulées : y<sub>j</sub> = e<sup>−0.8 t<sub>j</sub></sup> + σ ε<sub>j</sub>, avec ε<sub>j</sub> gaussien. Le bruit imite l'erreur de mesure d'une vraie expérience. Il ne porte que sur les données : les points de collocation n'ont pas de valeur, donc rien à bruiter. Le modèle est connu (<span class="m">u′ = −k u</span>), son paramètre ne l'est pas.</p>
+  <p>Le seul changement dans le code : <span class="m">k</span> devient un paramètre entraînable, optimisé par le même Adam que les poids du réseau.</p>
+  <div class="eq">L(w, <span class="p">k</span>) = <span class="d"><span class="fr"><span>1</span><span>N<sub>d</sub></span></span></span> Σ<sub>j</sub> (û(t<sub>j</sub>) − y<sub>j</sub>)<sup>2</sup> &nbsp;+&nbsp; <span class="c"><span class="d"><span class="fr"><span>1</span><span>N<sub>c</sub></span></span></span> Σ<sub>i</sub> (<span class="fr"><span>dû</span><span>dt</span></span>(t<sub>i</sub>) + <span class="p">k</span> û(t<sub>i</sub>))<sup>2</sup></span><br>
+  <span class="d"><span class="fr"><span>∂L</span><span>∂k</span></span> = <span class="fr"><span>2</span><span>N<sub>c</sub></span></span> Σ<sub>i</sub> r(t<sub>i</sub>) · û(t<sub>i</sub>)&nbsp;&nbsp;→ k est poussé vers la valeur qui rend la courbe ajustée compatible avec l'EDO</span></div>
+  <p>Le terme de données force <span class="m">û</span> à passer près des mesures. Le terme physique force <span class="m">û</span> à être une solution de l'EDO. La seule façon de satisfaire les deux à la fois est de trouver le bon <span class="m">k</span>.</p>
+</section>
+
+<section class="panel" aria-label="Démo problème inverse">
+  <h3>Démo 2 · identifier k (vraie valeur cachée : 0.8)</h3>
+  <div class="controls">
+    <button class="primary" id="i-run">Pause</button>
+    <button id="i-reset">Recommencer</button>
+    <label class="ctl" for="i-nd">Nombre de mesures <output id="i-nd-o">12</output><input type="range" id="i-nd" min="3" max="40" value="12"></label>
+    <label class="ctl" for="i-sig">Bruit σ <output id="i-sig-o">0.03</output><input type="range" id="i-sig" min="0" max="0.12" step="0.01" value="0.03"></label>
+    <label class="ctl" for="i-k0">k initial <output id="i-k0-o">0.20</output><input type="range" id="i-k0" min="0.05" max="3" step="0.05" value="0.2"></label>
+    <label class="ctl" for="i-speed">Vitesse <output id="i-speed-o">≈ 30 itérations/s</output><input type="range" id="i-speed" min="0" max="9" value="2"></label>
+  </div>
+  <div class="stats" id="i-stats"></div>
+  <div class="grid2">
+    <div class="fig"><canvas id="i-sol" height="260"></canvas>
+      <div class="legend"><span><i style="background:var(--exact)"></i>vraie courbe (k = 0.8)</span><span><i style="background:var(--pinn)"></i>PINN û(t)</span><span><i class="dot" style="background:var(--data)"></i>mesures bruitées</span></div>
+    </div>
+    <div class="fig"><canvas id="i-k" height="260"></canvas>
+      <div class="legend"><span><i style="background:var(--pinn)"></i>k estimé</span><span><i style="background:var(--ok)"></i>vraie valeur 0.8</span></div>
+    </div>
+  </div>
+  <div class="fig"><canvas id="i-loss" height="150"></canvas>
+    <div class="legend"><span><i style="background:var(--colloc)"></i>L<sub>EDO</sub></span><span><i style="background:var(--data)"></i>L<sub>données</sub></span><span>échelle log<sub>10</sub></span></div>
+  </div>
+</section>
+
+<section class="prose">
+  <h3>À essayer</h3>
+  <ul>
+    <li><b>Montez le bruit à 0.10</b> : k converge toujours, mais vers une valeur un peu biaisée qui change avec le tirage. L'erreur sur k reflète la qualité des données, comme pour tout ajustement.</li>
+    <li><b>Descendez à 3 mesures</b> : la physique compense en grande partie. Trois points sans modèle ne disent presque rien ; avec l'EDO, ils suffisent à fixer <span class="m">k</span> et <span class="m">u(0)</span>.</li>
+    <li><b>Changez le k initial</b> (0.05 ou 3) : k rejoint la même valeur, ce qui montre que le minimum est bien déterminé par les données et l'EDO, pas par le point de départ.</li>
+  </ul>
+</section>
+
+<section class="prose">
+  <span class="eyebrow">L'exemple de référence</span>
+  <h2>Raissi, Perdikaris &amp; Karniadakis (2019)</h2>
+  <p>L'article fondateur (<i>Journal of Computational Physics</i> 378, 686–707) fait exactement la même chose sur une EDP, l'équation de Burgers :</p>
+  <div class="eq">u<sub>t</sub> + <span class="p">λ<sub>1</sub></span> u u<sub>x</sub> − <span class="p">λ<sub>2</sub></span> u<sub>xx</sub> = 0,&nbsp;&nbsp; x ∈ [−1, 1], t ∈ [0, 1]<br><span class="d">vraies valeurs : λ<sub>1</sub> = 1,&nbsp; λ<sub>2</sub> = <span class="fr"><span>0.01</span><span>π</span></span> ≈ 0.0032 (viscosité)</span></div>
+  <p>Le réseau prend <span class="m">(t, x)</span> en entrée au lieu de <span class="m">t</span> seul. Les dérivées <span class="m">u<sub>t</sub></span>, <span class="m">u<sub>x</sub></span>, <span class="m">u<sub>xx</sub></span> s'obtiennent toutes par différentiation automatique. À partir de quelques milliers de points <span class="m">(t, x, u)</span> tirés d'une simulation, avec ou sans bruit ajouté, les auteurs retrouvent λ<sub>1</sub> et λ<sub>2</sub> avec une bonne précision, alors que la solution forme un choc très raide.</p>
+  <p>La structure est strictement celle de la démo 2 : une perte données, une perte résidu, et les coefficients de l'équation ajoutés à la liste des paramètres que l'optimiseur met à jour.</p>
+  <div class="pair">
+    <div>
+      <h3>Démo 2 (ici)</h3>
+      <ul><li>entrée : t</li><li>résidu : û′ + k û</li><li>inconnu : k</li><li>données : ~10 points</li></ul>
+    </div>
+    <div>
+      <h3>Burgers (Raissi 2019)</h3>
+      <ul><li>entrée : (t, x)</li><li>résidu : û<sub>t</sub> + λ<sub>1</sub> û û<sub>x</sub> − λ<sub>2</sub> û<sub>xx</sub></li><li>inconnus : λ<sub>1</sub>, λ<sub>2</sub></li><li>données : quelques milliers de points</li></ul>
+    </div>
+  </div>
+</section>
+
+<section class="prose">
+  <span class="eyebrow">Et pour les modèles osseux ?</span>
+  <h2>Ce qui change pour un système d'EDO de remodelage</h2>
+  <p>Pour un système <span class="m"><span class="fr"><span>dx</span><span>dt</span></span> = f(x; λ, θ)</span> avec plusieurs espèces (ostéoblastes, ostéoclastes, gènes du réseau de minéralisation…) et des paramètres de taux λ et de seuils θ :</p>
+  <ul>
+    <li>Le réseau a une sortie par variable d'état, et il y a un résidu par équation.</li>
+    <li>Le terme de données ne porte que sur les variables mesurées, aux temps de mesure. Les variables non mesurées sont contraintes uniquement par la physique : c'est l'un des vrais atouts des PINN.</li>
+    <li>On entraîne plutôt <span class="m">log λ</span> et <span class="m">log θ</span> pour garder des paramètres positifs, et on normalise le temps et les états à l'ordre de 1.</li>
+    <li>Premier test conseillé : générer des données synthétiques avec votre propre modèle et des paramètres connus, puis vérifier que le PINN les retrouve. C'est exactement la démo 2, en plus grand.</li>
+  </ul>
+  <p>Pour un petit système d'EDO bien posé, un ajustement classique (solveur + optimiseur, comme sous MATLAB) reste souvent plus rapide et plus précis. Le PINN devient intéressant quand les données sont rares, partielles ou bruitées, ou quand le modèle passe aux EDP (espace, diffusion).</p>
+</section>
+
+<section class="prose">
+  <span class="eyebrow">Sous le capot</span>
+  <h2>Le modèle utilisé dans les démos</h2>
+  <p>Les deux démos utilisent le même réseau, un perceptron à une couche cachée de 20 neurones :</p>
+  <div class="eq">û(t) = b<sub>2</sub> + Σ<sub>j=1..20</sub> w<sub>2,j</sub> tanh(w<sub>1,j</sub> t + b<sub>1,j</sub>)<br>
+  <span class="fr"><span>dû</span><span>dt</span></span> = Σ<sub>j</sub> w<sub>2,j</sub> w<sub>1,j</sub> (1 − tanh<sup>2</sup>(w<sub>1,j</sub> t + b<sub>1,j</sub>))<br>
+  <span class="d">61 poids (+ k dans la démo 2), dérivées exactes calculées à la main, comme le ferait l'autodiff</span></div>
+  <ul>
+    <li><b>Initialisation</b> : w<sub>1</sub> ~ N(0, 1,5<sup>2</sup>), b<sub>1</sub> ~ N(0, 1), w<sub>2</sub> ~ N(0, <span class="fr"><span>1</span><span>20</span></span>), b<sub>2</sub> = 0, avec une graine fixe pour que chaque « Recommencer » rejoue la même expérience.</li>
+    <li><b>Optimiseur</b> : Adam, pas d'apprentissage 0,01, β<sub>1</sub> = 0,9, β<sub>2</sub> = 0,999, gradient calculé sur tous les points à chaque itération (pas de mini-lots).</li>
+    <li><b>Démo 1</b> : L = (û(0) − 1)<sup>2</sup> + moyenne des r(t<sub>i</sub>)<sup>2</sup>, poids 1 pour chaque terme, 32 points de collocation tirés uniformément sur [0 ; 2,5], k = 1,5 fixé, 3000 itérations.</li>
+    <li><b>Démo 2</b> : 12 mesures régulièrement espacées sur [0,05 ; 3], bruit gaussien σ = 0,03, 50 points de collocation sur une grille régulière, k initial 0,2 entraîné avec les poids, 2500 itérations.</li>
+  </ul>
+</section>
+
+</div>
+
+<script>
+(() => {
+const H = 20, NP = 3*H + 2, IB2 = 3*H, IK = 3*H + 1;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function rng(seed){ let s = seed>>>0; return () => { s = (Math.imul(s,1664525) + 1013904223)>>>0; return s/4294967296; }; }
+function randn(r){ let u=0; while(!u) u=r(); const v=r(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+function initParams(seed, k0){
+  const r = rng(seed), P = new Float64Array(NP);
+  for (let j=0;j<H;j++){ P[j]=randn(r)*1.5; P[H+j]=randn(r)*1.0; P[2*H+j]=randn(r)/Math.sqrt(H); }
+  P[IB2]=0; P[IK]=k0; return P;
+}
+
+// --- réseau + gradients exacts ---
+const gu = new Float64Array(NP), gdu = new Float64Array(NP);
+let U=0, DU=0;
+function evalNet(P, t, grad){
+  let u = P[IB2], du = 0;
+  for (let j=0;j<H;j++){
+    const w1=P[j], b1=P[H+j], w2=P[2*H+j];
+    const h=Math.tanh(w1*t+b1), s=1-h*h;
+    u += w2*h; du += w2*s*w1;
+    if (grad){
+      const ds = -2*h*s;
+      gu[j]=w2*s*t; gu[H+j]=w2*s; gu[2*H+j]=h;
+      gdu[j]=w2*(s + w1*ds*t); gdu[H+j]=w2*w1*ds; gdu[2*H+j]=s*w1;
+    }
+  }
+  if (grad){ gu[IB2]=1; gdu[IB2]=0; gu[IK]=0; gdu[IK]=0; }
+  U=u; DU=du;
+}
+
+class Trainer {
+  constructor(o){ Object.assign(this,o); this.reset(); }
+  reset(){
+    this.P = initParams(this.seed, this.k0);
+    this.m = new Float64Array(NP); this.v = new Float64Array(NP); this.G = new Float64Array(NP);
+    this.it = 0; this.hD=[]; this.hR=[]; this.hK=[];
+  }
+  step(){
+    const P=this.P, G=this.G; G.fill(0);
+    let Ld=0, Lr=0; const nd=this.data.length, nc=this.colloc.length, k=P[IK];
+    for (const d of this.data){
+      evalNet(P,d.t,true); const e=U-d.y; Ld+=e*e;
+      const c = 2*e/nd; for (let i=0;i<IK;i++) G[i]+=c*gu[i];
+    }
+    Ld/=nd;
+    for (const t of this.colloc){
+      evalNet(P,t,true); const r=DU+k*U; Lr+=r*r;
+      if (this.physics){
+        const c = 2*r/nc;
+        for (let i=0;i<IK;i++) G[i]+=c*(gdu[i]+k*gu[i]);
+        G[IK]+=c*U;
+      }
+    }
+    Lr/=nc;
+    if (!this.kTrain) G[IK]=0;
+    // Adam
+    this.it++; const b1=0.9,b2=0.999,lr=this.lr, bc1=1-Math.pow(b1,this.it), bc2=1-Math.pow(b2,this.it);
+    for (let i=0;i<NP;i++){
+      if (i===IK && !this.kTrain) continue;
+      this.m[i]=b1*this.m[i]+(1-b1)*G[i]; this.v[i]=b2*this.v[i]+(1-b2)*G[i]*G[i];
+      P[i]-=lr*(this.m[i]/bc1)/(Math.sqrt(this.v[i]/bc2)+1e-8);
+    }
+    this.hD.push(Ld); this.hR.push(Lr); this.hK.push(P[IK]);
+    this.Ld=Ld; this.Lr=Lr;
+  }
+}
+
+// --- tracé ---
+function css(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function setup(cv){
+  const dpr = window.devicePixelRatio||1, w = cv.clientWidth, h = +cv.getAttribute('height');
+  if (cv.width !== Math.round(w*dpr)) { cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); cv.style.height = h+'px'; }
+  const g = cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); return {g,w,h};
+}
+function niceTicks(a,b,n){
+  const span=b-a, step0=span/n, mag=Math.pow(10,Math.floor(Math.log10(step0))), r=step0/mag;
+  const step=(r<1.5?1:r<3?2:r<7?5:10)*mag, out=[];
+  for (let v=Math.ceil(a/step-1e-9)*step; v<=b+1e-9; v+=step) out.push(+v.toFixed(10));
+  return out;
+}
+function plot(cv, o){
+  const {g,w,h} = setup(cv), pl=46, pr=12, pt=12, pb=30;
+  const fg=css('--fg'), mu=css('--muted'), ln=css('--line'), bg=css('--panel');
+  g.fillStyle=bg; g.fillRect(0,0,w,h);
+  const X=x=>pl+(x-o.x0)/(o.x1-o.x0)*(w-pl-pr), Y=y=>h-pb-(y-o.y0)/(o.y1-o.y0)*(h-pt-pb);
+  g.font='11px "JetBrains Mono", monospace'; g.lineWidth=1;
+  g.fillStyle=mu; g.textAlign='center'; g.textBaseline='top';
+  for (const t of niceTicks(o.x0,o.x1,5)){ g.strokeStyle=ln; g.beginPath(); g.moveTo(X(t),pt); g.lineTo(X(t),h-pb); g.stroke(); g.fillText(o.xf?o.xf(t):t, X(t), h-pb+6); }
+  g.textAlign='right'; g.textBaseline='middle';
+  for (const t of niceTicks(o.y0,o.y1,4)){ g.strokeStyle=ln; g.beginPath(); g.moveTo(pl,Y(t)); g.lineTo(w-pr,Y(t)); g.stroke(); g.fillText(o.yf?o.yf(t):t, pl-6, Y(t)); }
+  if (o.xl){ g.textAlign='right'; g.textBaseline='bottom'; g.fillText(o.xl, w-pr, h-pb-4); }
+  if (o.yl){ g.textAlign='left'; g.textBaseline='top';
+    if (o.yl==='log10 L'){ let x=pl+6; g.fillText('log',x,pt+2); x+=g.measureText('log').width; g.font='9px "JetBrains Mono", monospace'; g.fillText('10',x,pt+7); x+=g.measureText('10').width+3; g.font='11px "JetBrains Mono", monospace'; g.fillText('L',x,pt+2); }
+    else g.fillText(o.yl, pl+6, pt+2); }
+  g.save(); g.beginPath(); g.rect(pl,pt,w-pl-pr,h-pt-pb); g.clip();
+  for (const s of o.series){
+    const col=css(s.c);
+    if (s.type==='line'){
+      g.strokeStyle=col; g.lineWidth=s.lw||2; g.setLineDash(s.dash||[]); g.beginPath();
+      let first=true;
+      for (let i=0;i<s.x.length;i++){ const yy=s.y[i]; if(!isFinite(yy)) continue; const px=X(s.x[i]), py=Y(yy); first?g.moveTo(px,py):g.lineTo(px,py); first=false; }
+      g.stroke(); g.setLineDash([]);
+    } else if (s.type==='pts'){
+      g.fillStyle=col; for (let i=0;i<s.x.length;i++){ g.beginPath(); g.arc(X(s.x[i]),Y(s.y[i]),s.r||3.5,0,7); g.fill(); }
+    } else if (s.type==='stems'){
+      g.strokeStyle=col; g.globalAlpha=.5; g.lineWidth=1; g.setLineDash([2,3]);
+      for (let i=0;i<s.x.length;i++){ g.beginPath(); g.moveTo(X(s.x[i]),h-pb); g.lineTo(X(s.x[i]),Y(s.y[i])); g.stroke(); }
+      g.setLineDash([]); g.globalAlpha=1; g.lineWidth=1.8; g.fillStyle=bg;
+      for (let i=0;i<s.x.length;i++){ g.beginPath(); g.arc(X(s.x[i]),Y(s.y[i]),3.6,0,7); g.fill(); g.stroke(); }
+    } else if (s.type==='ticks'){
+      g.strokeStyle=col; g.lineWidth=2; for (const x of s.x){ g.beginPath(); g.moveTo(X(x),h-pb); g.lineTo(X(x),h-pb-8); g.stroke(); }
+    }
+  }
+  g.restore();
+}
+const lin=(a,b,n)=>Array.from({length:n},(_,i)=>a+(b-a)*i/(n-1));
+const log10=a=>a.map(v=>Math.log10(Math.max(v,1e-12)));
+function decimate(a, maxN){ if(a.length<=maxN) return {i:a.map((_,k)=>k), v:a}; const st=a.length/maxN, i=[],v=[]; for(let k=0;k<maxN;k++){const j=Math.floor(k*st); i.push(j); v.push(a[j]);} return {i,v}; }
+const fmt=(v,d=3)=>v.toExponential(d===3?2:d);
+
+// ================= Démo 1 =================
+const F = { T:2.5, k:1.5, maxIt:3000, running:!reduce };
+const fGrid = lin(0,F.T,160), fExact=fGrid.map(t=>Math.exp(-F.k*t));
+let fSeedC = 7;
+function fColloc(n){ const r=rng(fSeedC*101+n); return Array.from({length:n},()=>r()*F.T).sort((a,b)=>a-b); }
+const ft = new Trainer({seed:3, k0:F.k, kTrain:false, lr:0.01, physics:true, data:[{t:0,y:1}], colloc:fColloc(32)});
+const $=id=>document.getElementById(id);
+
+function fDraw(){
+  const P=ft.P, uh=fGrid.map(t=>(evalNet(P,t,false),U)), rr=fGrid.map(t=>(evalNet(P,t,false),DU+F.k*U));
+  const cu=ft.colloc.map(t=>(evalNet(P,t,false),U));
+  const ymin=Math.min(-0.2,...uh.map(v=>Math.max(v,-1))), ymax=Math.max(1.2,...uh.map(v=>Math.min(v,2)));
+  plot($('f-sol'),{x0:0,x1:F.T,y0:ymin,y1:ymax,xl:'t',yl:'u',series:[
+    {type:'line',x:fGrid,y:fExact,c:'--exact',dash:[6,5]},
+    {type:'line',x:fGrid,y:uh,c:'--pinn',lw:2.5},
+    {type:'stems',x:ft.colloc,y:cu,c:'--colloc'},{type:'ticks',x:ft.colloc,c:'--colloc'},
+    {type:'pts',x:[0],y:[1],c:'--data',r:5}]});
+  const ra=Math.max(0.05,...rr.map(Math.abs)); const rm=Math.min(ra,3)*1.1;
+  plot($('f-res'),{x0:0,x1:F.T,y0:-rm,y1:rm,xl:'t',yl:'r(t)',series:[
+    {type:'line',x:[0,F.T],y:[0,0],c:'--muted',lw:1},
+    {type:'line',x:fGrid,y:rr,c:'--colloc',lw:2},
+    {type:'ticks',x:ft.colloc,c:'--colloc'}]});
+  fLoss();
+  const err=Math.max(...uh.map((v,i)=>Math.abs(v-fExact[i])));
+  $('f-stats').innerHTML=`<span><b>itération</b> ${ft.it}</span><span><b>L<sub>CI</sub></b> ${fmt(ft.Ld??0)}</span><span><b>L<sub>EDO</sub></b> ${fmt(ft.Lr??0)}</span><span><b>erreur max vs exacte</b> ${err.toFixed(4)}</span>`;
+}
+function lossPlot(cv, tr, maxIt){
+  const d=decimate(log10(tr.hD),400), r=decimate(log10(tr.hR),400);
+  const all=d.v.concat(r.v); const lo=Math.min(-6,...all), hi=Math.max(1,...all);
+  plot(cv,{x0:0,x1:Math.max(maxIt,tr.it),y0:Math.floor(lo),y1:Math.ceil(hi),xl:'itérations',yl:'log10 L',yf:v=>v,series:[
+    {type:'line',x:r.i,y:r.v,c:'--colloc',lw:1.8},
+    {type:'line',x:d.i,y:d.v,c:'--data',lw:1.8}]});
+}
+function fLoss(){ lossPlot($('f-loss'), ft, F.maxIt); }
+
+// ================= Démo 2 =================
+const I = { T:3, kTrue:0.8, maxIt:2500, running:!reduce };
+const iGrid=lin(0,I.T,160), iExact=iGrid.map(t=>Math.exp(-I.kTrue*t));
+function iData(n, sig){ const r=rng(42+n); return lin(0.05,I.T,n).map(t=>({t, y:Math.exp(-I.kTrue*t)+sig*randn(r)})); }
+const iColl = lin(0,I.T,50);
+const it_ = new Trainer({seed:11, k0:0.2, kTrain:true, lr:0.01, physics:true, data:iData(12,0.03), colloc:iColl});
+
+function iDraw(){
+  const P=it_.P, uh=iGrid.map(t=>(evalNet(P,t,false),U));
+  const ys=it_.data.map(d=>d.y);
+  const ymin=Math.min(-0.15,...ys,...uh.map(v=>Math.max(v,-1))), ymax=Math.max(1.15,...ys,...uh.map(v=>Math.min(v,2)));
+  plot($('i-sol'),{x0:0,x1:I.T,y0:ymin,y1:ymax,xl:'t',yl:'u',series:[
+    {type:'line',x:iGrid,y:iExact,c:'--exact',dash:[6,5]},
+    {type:'line',x:iGrid,y:uh,c:'--pinn',lw:2.5},
+    {type:'pts',x:it_.data.map(d=>d.t),y:ys,c:'--data',r:4}]});
+  const kk=decimate(it_.hK,400); const kmax=Math.max(1.2,it_.k0+0.2,...kk.v), kmin=Math.min(0,...kk.v);
+  plot($('i-k'),{x0:0,x1:Math.max(I.maxIt,it_.it),y0:kmin,y1:kmax,xl:'itérations',yl:'k',series:[
+    {type:'line',x:[0,Math.max(I.maxIt,it_.it)],y:[I.kTrue,I.kTrue],c:'--ok',lw:1.5,dash:[5,4]},
+    {type:'line',x:kk.i,y:kk.v,c:'--pinn',lw:2.5}]});
+  lossPlot($('i-loss'), it_, I.maxIt);
+  const k=it_.P[IK], e=Math.abs(k-I.kTrue)/I.kTrue*100;
+  $('i-stats').innerHTML=`<span><b>itération</b> ${it_.it}</span><span><b>k estimé</b> ${k.toFixed(4)}</span><span><b>vraie valeur</b> 0.8000</span><span><b>écart</b> ${e.toFixed(1)} %</span><span><b>L<sub>données</sub></b> ${fmt(it_.Ld??0)}</span><span><b>L<sub>EDO</sub></b> ${fmt(it_.Lr??0)}</span>`;
+}
+
+// ================= boucle =================
+const SPEEDS=[0.1,0.2,0.5,1,2,3,5,10,15,20]; F.spf=0.5; I.spf=0.5; F.acc=0; I.acc=0;
+function loop(){
+  if (F.running){ F.acc+=F.spf; while(F.acc>=1 && ft.it<F.maxIt){ ft.step(); F.acc--; } if (ft.it>=F.maxIt) setRun(F,'f',false); fDraw(); }
+  if (I.running){ I.acc+=I.spf; while(I.acc>=1 && it_.it<I.maxIt){ it_.step(); I.acc--; } if (it_.it>=I.maxIt) setRun(I,'i',false); iDraw(); }
+  requestAnimationFrame(loop);
+}
+function setRun(S,p,on){ S.running=on; $(p+'-run').textContent = on?'Pause':'Lancer'; }
+function runAll(tr,max){ while(tr.it<max) tr.step(); }
+
+$('f-run').onclick=()=>{ if(ft.it>=F.maxIt) ft.reset(); setRun(F,'f',!F.running); };
+$('f-reset').onclick=()=>{ ft.reset(); setRun(F,'f',true); };
+$('f-resample').onclick=()=>{ fSeedC++; ft.colloc=fColloc(+$('f-nc').value); ft.reset(); setRun(F,'f',true); };
+$('f-nc').oninput=e=>{ $('f-nc-o').textContent=e.target.value; ft.colloc=fColloc(+e.target.value); ft.reset(); setRun(F,'f',true); };
+$('f-phys').onchange=e=>{ ft.physics=e.target.checked; ft.reset(); setRun(F,'f',true); };
+
+const spLabel=v=>'≈ '+Math.round(v*60)+' itérations/s';
+$('f-speed').oninput=e=>{ F.spf=SPEEDS[+e.target.value]; $('f-speed-o').textContent=spLabel(F.spf); };
+$('i-speed').oninput=e=>{ I.spf=SPEEDS[+e.target.value]; $('i-speed-o').textContent=spLabel(I.spf); };
+function iRebuild(){ it_.data=iData(+$('i-nd').value, +$('i-sig').value); it_.k0=+$('i-k0').value; it_.reset(); setRun(I,'i',true); }
+$('i-run').onclick=()=>{ if(it_.it>=I.maxIt) it_.reset(); setRun(I,'i',!I.running); };
+$('i-reset').onclick=iRebuild;
+$('i-nd').oninput=e=>{ $('i-nd-o').textContent=e.target.value; iRebuild(); };
+$('i-sig').oninput=e=>{ $('i-sig-o').textContent=(+e.target.value).toFixed(2); iRebuild(); };
+$('i-k0').oninput=e=>{ $('i-k0-o').textContent=(+e.target.value).toFixed(2); iRebuild(); };
+
+if (reduce){ runAll(ft,F.maxIt); runAll(it_,I.maxIt); setRun(F,'f',false); setRun(I,'i',false); }
+fDraw(); iDraw();
+addEventListener('resize',()=>{ fDraw(); iDraw(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{ fDraw(); iDraw(); });
+new MutationObserver(()=>{ fDraw(); iDraw(); }).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
